@@ -25,7 +25,7 @@ func NewServer(cfg *config.Config, logger *observability.Logger) *Server {
 		logger: logger,
 	}
 
-	mux.HandleFunc("/health", s.health)
+	s.routes()
 
 	s.http = &http.Server{
 		Addr:         ":" + cfg.Port,
