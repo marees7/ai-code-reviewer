@@ -7,10 +7,13 @@ import (
 )
 
 type Config struct {
-	Port         string
-	Env          string
-	GithubSecret string
-	LogLevel     string
+	Port                 string
+	Env                  string
+	GithubSecret         string
+	LogLevel             string
+	GithubPrivateKeyPath string
+	GithubAppID          string
+	GithubInstallationID string
 }
 
 func Load() *Config {

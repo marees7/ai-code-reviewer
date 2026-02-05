@@ -2,4 +2,4 @@ module ai-code-reviewer
 
 go 1.23.3
 
-require github.com/google/wire v0.7.0
+require github.com/golang-jwt/jwt/v4 v4.5.2
