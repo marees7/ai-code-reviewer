@@ -16,7 +16,7 @@ func (h *WebhookHandler) handlePullRequest(payload []byte) {
 
 	client := NewClient(h.cfg, h.logger)
 
-	diff, err := client.GetPRDiff(
+	files, err := client.GetPRDiff(
 		context.Background(),
 		event.Repository.FullName,
 		event.PullRequest.Number,
@@ -27,7 +27,7 @@ func (h *WebhookHandler) handlePullRequest(payload []byte) {
 		return
 	}
 
-	h.logger.Info("diff fetched",
-		"size", len(diff),
+	h.logger.Info("pr files fetched",
+		"count", len(files),
 	)
 }
