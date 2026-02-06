@@ -15,17 +15,20 @@ type WebhookHandler struct {
 	cfg    *config.Config
 	logger *observability.Logger
 	client Client // ← ADD THIS
+	queue  JobQueue
 }
 
 func NewWebhookHandler(
 	cfg *config.Config,
 	logger *observability.Logger,
 	client Client, // ← inject
+	queue JobQueue,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		cfg:    cfg,
 		logger: logger,
 		client: client,
+		queue:  queue,
 	}
 }
 
