@@ -14,12 +14,18 @@ import (
 type WebhookHandler struct {
 	cfg    *config.Config
 	logger *observability.Logger
+	client Client // ← ADD THIS
 }
 
-func NewWebhookHandler(cfg *config.Config, logger *observability.Logger) *WebhookHandler {
+func NewWebhookHandler(
+	cfg *config.Config,
+	logger *observability.Logger,
+	client Client, // ← inject
+) *WebhookHandler {
 	return &WebhookHandler{
 		cfg:    cfg,
 		logger: logger,
+		client: client,
 	}
 }
 

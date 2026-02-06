@@ -12,7 +12,9 @@ func (s *Server) routes() {
 	mux.HandleFunc("/health", s.health)
 
 	// GitHub webhook
-	gh := github.NewWebhookHandler(s.cfg, s.logger)
+	ghClient := github.NewClient(s.cfg, s.logger)
+
+	gh := github.NewWebhookHandler(s.cfg, s.logger, ghClient)
 	mux.HandleFunc("/webhook/github", gh.Handle)
 
 	s.http.Handler = mux
