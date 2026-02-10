@@ -68,14 +68,12 @@ func (p *Processor) handle(j Job) {
 	)
 	defer cancel()
 
-	// 1. Get files from GitHub
 	files, err := p.client.GetPRFiles(ctx, j.Repo, j.PR)
 	if err != nil {
 		p.logger.Error("get files failed", "err", err)
 		return
 	}
 
-	// 2. For each file
 	for _, f := range files {
 
 		parsed, _ := diff.Parse(f.Patch)
@@ -84,12 +82,10 @@ func (p *Processor) handle(j Job) {
 
 			content := pf.ToAIContext()
 
-			// 3. Chunk
 			chunks := p.chunker.Split(pf.Filename, content)
 
 			for _, ch := range chunks {
 
-				// 4. AI Review
 				reviewText, err :=
 					p.ai.Review(ctx, ai.ReviewRequest{
 						File:    ch.File,
@@ -100,10 +96,6 @@ func (p *Processor) handle(j Job) {
 					p.logger.Error("ai failed", "err", err)
 					continue
 				}
-
-				// ─────────────────────────────────────
-				// 👉 DAY 7 LOGIC STARTS HERE
-				// ─────────────────────────────────────
 
 				issues := review.ExtractIssues(reviewText)
 
