@@ -9,29 +9,33 @@ import (
 	"ai-code-reviewer/internal/diff"
 	"ai-code-reviewer/internal/github"
 	"ai-code-reviewer/internal/observability"
+	"ai-code-reviewer/internal/review"
 )
 
 type Processor struct {
-	queue   Queue
-	client  github.Client
-	logger  *observability.Logger
-	chunker *chunker.Chunker
-	ai      ai.Provider
+	queue    Queue
+	client   github.Client
+	comments github.CommentClient
+	logger   *observability.Logger
+	chunker  *chunker.Chunker
+	ai       ai.Provider
 }
 
 func NewProcessor(
 	q Queue,
 	c github.Client,
+	comments github.CommentClient,
 	l *observability.Logger,
 	a ai.Provider,
 ) *Processor {
 
 	return &Processor{
-		queue:   q,
-		client:  c,
-		logger:  l,
-		chunker: chunker.New(3000),
-		ai:      a,
+		queue:    q,
+		client:   c,
+		comments: comments,
+		logger:   l,
+		chunker:  chunker.New(3000),
+		ai:       a,
 	}
 }
 
@@ -77,20 +81,41 @@ func (p *Processor) handle(j Job) {
 
 			for _, ch := range chunks {
 
-				review, err :=
-					p.ai.Review(ctx, ai.ReviewRequest{
+				reviewText, err := p.ai.Review(
+					ctx,
+					ai.ReviewRequest{
 						File:    ch.File,
 						Content: ch.Content,
-					})
+					},
+				)
 
 				if err != nil {
-					p.logger.Error("ai failed", "err", err)
 					continue
+				}
+
+				// Format
+				comment := review.FormatComment(
+					ch.File,
+					reviewText,
+				)
+
+				// Post to GitHub
+				err = p.comments.CreateComment(
+					ctx,
+					j.Repo,
+					j.PR,
+					comment,
+				)
+
+				if err != nil {
+					p.logger.Error("comment failed",
+						"error", err,
+					)
 				}
 
 				p.logger.Info("AI REVIEW",
 					"file", ch.File,
-					"review", review,
+					"review", reviewText,
 				)
 			}
 		}

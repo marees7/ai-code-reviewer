@@ -14,6 +14,7 @@ type Config struct {
 	GithubPrivateKeyPath string
 	GithubAppID          string
 	GithubInstallationID string
+	GitHubToken          string
 	OpenAIKey            string
 	OpenAIModel          string
 }
@@ -29,6 +30,7 @@ func Load() *Config {
 		GithubInstallationID: getEnv("GITHUB_APP_INSTALLATION_ID", ""),
 		OpenAIKey:            getEnv("OPENAI_KEY", ""),
 		OpenAIModel:          getEnv("OPENAI_MODEL", "gpt-3.5-turbo"),
+		GitHubToken:          getEnv("GITHUB_TOKEN", ""),
 	}
 }
 

@@ -30,6 +30,10 @@ func (s *Server) routes() {
 		adapter,
 	)
 
+	commenter := github.NewCommentService(
+		s.cfg.GitHubToken,
+	)
+
 	aiProvider := ai.NewOpenAI(
 		s.cfg.OpenAIKey,
 		s.cfg.OpenAIModel,
@@ -39,6 +43,7 @@ func (s *Server) routes() {
 	processor := worker.NewProcessor(
 		memQueue,
 		ghClient,
+		commenter,
 		s.logger,
 		aiProvider,
 	)
