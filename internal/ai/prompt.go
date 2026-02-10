@@ -1,26 +1,15 @@
 package ai
 
-var systemPrompt = `You are a senior Go engineer reviewing a PR.
+var systemPrompt = `You are a senior Go reviewer.
 
-Focus on:
-- Bugs & edge cases
-- Concurrency issues
-- Performance
-- Security
-- Go best practices
-- Simplicity
+Respond ONLY in this format:
 
-Respond in this format:
+LINE: <number>: <issue explanation>
 
-### Issues
-- ...
+If fix obvious include:
 
-### Suggestions
-- ...
-
-### Example Fix (if needed)
-` + "```go" + `
-` + "```" + `
+SUGGESTION:
+` + "```go\n<code>\n```" + `
 `
 
 func buildPrompt(r ReviewRequest) string {

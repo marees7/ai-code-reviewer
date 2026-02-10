@@ -2,10 +2,14 @@ package worker
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"fmt"
 	"time"
 
 	"ai-code-reviewer/internal/ai"
 	"ai-code-reviewer/internal/chunker"
+	"ai-code-reviewer/internal/dedup"
 	"ai-code-reviewer/internal/diff"
 	"ai-code-reviewer/internal/github"
 	"ai-code-reviewer/internal/observability"
@@ -15,7 +19,8 @@ import (
 type Processor struct {
 	queue    Queue
 	client   github.Client
-	comments github.CommentClient
+	comments *github.CommentService
+	dedup    dedup.Store
 	logger   *observability.Logger
 	chunker  *chunker.Chunker
 	ai       ai.Provider
@@ -24,7 +29,8 @@ type Processor struct {
 func NewProcessor(
 	q Queue,
 	c github.Client,
-	comments github.CommentClient,
+	comments *github.CommentService,
+	d dedup.Store,
 	l *observability.Logger,
 	a ai.Provider,
 ) *Processor {
@@ -33,6 +39,7 @@ func NewProcessor(
 		queue:    q,
 		client:   c,
 		comments: comments,
+		dedup:    d,
 		logger:   l,
 		chunker:  chunker.New(3000),
 		ai:       a,
@@ -61,11 +68,14 @@ func (p *Processor) handle(j Job) {
 	)
 	defer cancel()
 
+	// 1. Get files from GitHub
 	files, err := p.client.GetPRFiles(ctx, j.Repo, j.PR)
 	if err != nil {
+		p.logger.Error("get files failed", "err", err)
 		return
 	}
 
+	// 2. For each file
 	for _, f := range files {
 
 		parsed, _ := diff.Parse(f.Patch)
@@ -74,43 +84,64 @@ func (p *Processor) handle(j Job) {
 
 			content := pf.ToAIContext()
 
-			chunks := p.chunker.Split(
-				pf.Filename,
-				content,
-			)
+			// 3. Chunk
+			chunks := p.chunker.Split(pf.Filename, content)
 
 			for _, ch := range chunks {
 
-				reviewText, err := p.ai.Review(
-					ctx,
-					ai.ReviewRequest{
+				// 4. AI Review
+				reviewText, err :=
+					p.ai.Review(ctx, ai.ReviewRequest{
 						File:    ch.File,
 						Content: ch.Content,
-					},
-				)
+					})
 
 				if err != nil {
+					p.logger.Error("ai failed", "err", err)
 					continue
 				}
 
-				// Format
-				comment := review.FormatComment(
-					ch.File,
-					reviewText,
-				)
+				// ─────────────────────────────────────
+				// 👉 DAY 7 LOGIC STARTS HERE
+				// ─────────────────────────────────────
 
-				// Post to GitHub
-				err = p.comments.CreateComment(
-					ctx,
-					j.Repo,
-					j.PR,
-					comment,
-				)
+				issues := review.ExtractIssues(reviewText)
 
-				if err != nil {
-					p.logger.Error("comment failed",
-						"error", err,
+				for _, is := range issues {
+
+					// Create unique key
+					key := fmt.Sprintf(
+						"%s:%d:%s",
+						ch.File,
+						is.Line,
+						hash(is.Text),
 					)
+
+					// Dedup check
+					if p.dedup.Seen(ctx, key) {
+						continue
+					}
+
+					comment := github.LineComment{
+						Body: is.Text,
+						Path: ch.File,
+						Line: is.Line,
+						Side: "RIGHT",
+					}
+
+					err = p.comments.CreateLineComment(
+						ctx, j.Repo, j.PR, comment,
+					)
+
+					if err != nil {
+						p.logger.Error("comment failed",
+							"err", err,
+						)
+						continue
+					}
+
+					// mark as posted
+					p.dedup.Mark(ctx, key)
 				}
 
 				p.logger.Info("AI REVIEW",
@@ -120,4 +151,9 @@ func (p *Processor) handle(j Job) {
 			}
 		}
 	}
+}
+
+func hash(s string) string {
+	h := sha1.Sum([]byte(s))
+	return hex.EncodeToString(h[:])
 }

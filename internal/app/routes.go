@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"ai-code-reviewer/internal/ai"
+	"ai-code-reviewer/internal/dedup"
 	"ai-code-reviewer/internal/github"
 	"ai-code-reviewer/internal/worker"
 )
@@ -39,11 +40,14 @@ func (s *Server) routes() {
 		s.cfg.OpenAIModel,
 	)
 
+	dedup := dedup.NewMemory()
+
 	// background processor
 	processor := worker.NewProcessor(
 		memQueue,
 		ghClient,
 		commenter,
+		dedup,
 		s.logger,
 		aiProvider,
 	)
