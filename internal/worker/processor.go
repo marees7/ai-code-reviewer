@@ -13,13 +13,14 @@ import (
 	"ai-code-reviewer/internal/diff"
 	"ai-code-reviewer/internal/github"
 	"ai-code-reviewer/internal/observability"
+	"ai-code-reviewer/internal/retry"
 	"ai-code-reviewer/internal/review"
 )
 
 type Processor struct {
 	queue    Queue
 	client   github.Client
-	comments *github.CommentService
+	comments github.CommentClient
 	dedup    dedup.Store
 	logger   *observability.Logger
 	chunker  *chunker.Chunker
@@ -29,7 +30,7 @@ type Processor struct {
 func NewProcessor(
 	q Queue,
 	c github.Client,
-	comments *github.CommentService,
+	comments github.CommentClient,
 	d dedup.Store,
 	l *observability.Logger,
 	a ai.Provider,
@@ -121,9 +122,11 @@ func (p *Processor) handle(j Job) {
 						Side: "RIGHT",
 					}
 
-					err = p.comments.CreateLineComment(
-						ctx, j.Repo, j.PR, comment,
-					)
+					err = retry.Do(ctx, 3, time.Second, func() error {
+						return p.comments.CreateLineComment(
+							ctx, j.Repo, j.PR, comment,
+						)
+					})
 
 					if err != nil {
 						p.logger.Error("comment failed",

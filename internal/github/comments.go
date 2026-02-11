@@ -2,6 +2,7 @@ package github
 
 import "context"
 
+//go:generate mockery --name CommentClient --output ../mocks --with-expecter
 type CommentClient interface {
-	CreateComment(ctx context.Context, repo string, pr int, body string) error
+	CreateLineComment(ctx context.Context, repo string, pr int, comment LineComment) error
 }
