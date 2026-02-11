@@ -15,10 +15,12 @@ func (s *Server) routes() {
 
 	mux.HandleFunc("/health", s.health)
 	// create core queue
-	memQueue := worker.NewMemoryQueue(100)
+
+	// create queue based on config
+	queue := worker.NewQueue(s.cfg)
 
 	// adapter so github pkg doesn't know worker
-	adapter := worker.NewAdapter(memQueue)
+	adapter := worker.NewAdapter(queue)
 
 	// github client
 	ghClient := github.NewClient(s.cfg, s.logger)
@@ -44,7 +46,7 @@ func (s *Server) routes() {
 
 	// background processor
 	processor := worker.NewProcessor(
-		memQueue,
+		queue,
 		ghClient,
 		commenter,
 		dedup,
