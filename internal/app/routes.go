@@ -37,10 +37,9 @@ func (s *Server) routes() {
 		s.cfg.GitHubToken,
 	)
 
-	aiProvider := ai.NewOpenAI(
-		s.cfg.OpenAIKey,
-		s.cfg.OpenAIModel,
-	)
+	primary := ai.NewProvider(s.cfg)
+
+	fallback := ai.NewFallback(primary, ai.NewOpenAI(s.cfg.OpenAIKey, s.cfg.OpenAIModel))
 
 	dedup := dedup.NewMemory()
 
@@ -51,7 +50,7 @@ func (s *Server) routes() {
 		commenter,
 		dedup,
 		s.logger,
-		aiProvider,
+		fallback,
 	)
 
 	mux.HandleFunc("/webhook/github", gh.Handle)

@@ -11,6 +11,7 @@ type Config struct {
 	Env                  string
 	GithubSecret         string
 	LogLevel             string
+	AIProvider           string
 	GithubPrivateKeyPath string
 	GithubAppID          string
 	GithubInstallationID string
@@ -19,6 +20,8 @@ type Config struct {
 	OpenAIModel          string
 	RedisAddr            string
 	QueueType            string
+	OllamaURL            string
+	OllamaModel          string
 }
 
 func Load() *Config {
@@ -29,6 +32,9 @@ func Load() *Config {
 		LogLevel:             getEnv("LOG_LEVEL", "debug"),
 		GithubPrivateKeyPath: getEnv("GITHUB_APP_PRIVATE_KEY_PATH", ""),
 		GithubAppID:          getEnv("GITHUB_APP_ID", ""),
+		AIProvider:           getEnv("AI_PROVIDER", "openai"),
+		OllamaURL:            getEnv("OLLAMA_URL", "http://localhost:11434"),
+		OllamaModel:          getEnv("OLLAMA_MODEL", "llama3"),
 		GithubInstallationID: getEnv("GITHUB_APP_INSTALLATION_ID", ""),
 		OpenAIKey:            getEnv("OPENAI_KEY", ""),
 		OpenAIModel:          getEnv("OPENAI_MODEL", "gpt-3.5-turbo"),
