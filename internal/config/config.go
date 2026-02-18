@@ -43,6 +43,8 @@ func Load() *Config {
 		GitHubToken:          getEnv("GITHUB_TOKEN", ""),
 		RedisAddr:            getEnv("REDIS_ADDR", "localhost:6379"),
 		QueueType:            getEnv("QUEUE_TYPE", "memory"), // memory | redis
+		RateLimitRPS:         getEnvInt("RATE_LIMIT_RPS", 2),
+		RateLimitBurst:       getEnvInt("RATE_LIMIT_BURST", 4),
 	}
 }
 

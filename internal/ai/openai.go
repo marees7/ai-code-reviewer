@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -19,7 +20,7 @@ func NewOpenAI(key, model string) *OpenAI {
 
 func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
 
-	prompt := buildPrompt(r)
+	prompt := BuildPrompt(r)
 
 	body := map[string]any{
 		"model": o.Model,
@@ -47,6 +48,11 @@ func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
 	}
 	defer res.Body.Close()
 
+	if res.StatusCode >= 300 {
+		b, _ := io.ReadAll(res.Body)
+		return "", fmt.Errorf("openai status %d: %s", res.StatusCode, string(b))
+	}
+
 	var out struct {
 		Choices []struct {
 			Message struct {
@@ -55,7 +61,9 @@ func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
 		} `json:"choices"`
 	}
 
-	_ = json.NewDecoder(res.Body).Decode(&out)
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		return "", err
+	}
 
 	if len(out.Choices) == 0 {
 		return "", fmt.Errorf("no response")

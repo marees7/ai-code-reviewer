@@ -15,6 +15,10 @@ import (
 )
 
 func (s *Server) routes() {
+	if s.http == nil {
+		return
+	}
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", s.health)

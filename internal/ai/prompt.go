@@ -2,14 +2,20 @@ package ai
 
 var systemPrompt = `You are a senior Go reviewer.
 
-Respond ONLY in this format:
+Return STRICT JSON only using this schema:
+{
+  "issues": [
+    {
+      "line": 12,
+      "severity": "high|medium|low",
+      "title": "short description",
+      "suggestion": "how to fix"
+    }
+  ]
+}
 
-LINE: <number>: <issue explanation>
-
-If fix obvious include:
-
-SUGGESTION:
-` + "```go\n<code>\n```" + `
+No markdown.
+No prose.
 `
 
 func buildPrompt(r ReviewRequest) string {

@@ -5,6 +5,7 @@ import (
 
 	"ai-code-reviewer/internal/dedup"
 	"ai-code-reviewer/internal/mocks"
+	"ai-code-reviewer/internal/ratelimit"
 	"ai-code-reviewer/internal/worker"
 
 	"github.com/stretchr/testify/suite"
@@ -32,6 +33,7 @@ func (s *ProcessorSuite) SetupTest() {
 		dedup.NewMemory(),
 		nil,
 		s.ai,
+		ratelimit.New(1, 1),
 	)
 }
 

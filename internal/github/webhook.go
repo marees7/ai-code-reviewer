@@ -18,6 +18,8 @@ type WebhookHandler struct {
 	queue  JobQueue
 }
 
+const maxWebhookBodyBytes = 1 << 20 // 1 MiB
+
 func NewWebhookHandler(
 	cfg *config.Config,
 	logger *observability.Logger,
@@ -33,6 +35,8 @@ func NewWebhookHandler(
 }
 
 func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxWebhookBodyBytes)
+
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)

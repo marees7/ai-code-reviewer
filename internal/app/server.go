@@ -19,9 +19,6 @@ type Server struct {
 }
 
 func NewServer(cfg *config.Config, logger *observability.Logger) *Server {
-
-	mux := http.NewServeMux()
-
 	s := &Server{
 		cfg:    cfg,
 		logger: logger,
@@ -31,14 +28,12 @@ func NewServer(cfg *config.Config, logger *observability.Logger) *Server {
 		),
 	}
 
-	s.routes()
-
 	s.http = &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 20 * time.Second,
 	}
+	s.routes()
 
 	return s
 }
