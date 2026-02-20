@@ -3,6 +3,7 @@ package worker_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"ai-code-reviewer/internal/worker"
 
@@ -16,6 +17,13 @@ type RedisSuite struct {
 
 func (s *RedisSuite) SetupSuite() {
 	s.q = worker.NewRedisQueue("localhost:6379", "test")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := s.q.Push(ctx, worker.Job{Repo: "health/check", PR: 0}); err != nil {
+		s.T().Skip("redis unavailable on localhost:6379")
+	}
+	_, _ = s.q.Pop(ctx)
 }
 
 func (s *RedisSuite) TestPushPop() {

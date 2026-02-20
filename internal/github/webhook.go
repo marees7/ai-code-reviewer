@@ -35,6 +35,11 @@ func NewWebhookHandler(
 }
 
 func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, maxWebhookBodyBytes)
 
 	payload, err := io.ReadAll(r.Body)

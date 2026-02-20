@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"errors"
 )
 
 type MemoryQueue struct {
@@ -29,6 +28,6 @@ func (m *MemoryQueue) Pop(ctx context.Context) (Job, error) {
 	case j := <-m.ch:
 		return j, nil
 	case <-ctx.Done():
-		return Job{}, errors.New("timeout")
+		return Job{}, ctx.Err()
 	}
 }

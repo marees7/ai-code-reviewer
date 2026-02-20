@@ -7,15 +7,23 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 type OpenAI struct {
-	Key   string
-	Model string
+	Key    string
+	Model  string
+	client *http.Client
 }
 
 func NewOpenAI(key, model string) *OpenAI {
-	return &OpenAI{Key: key, Model: model}
+	return &OpenAI{
+		Key:   key,
+		Model: model,
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
 }
 
 func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
@@ -30,19 +38,25 @@ func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
 		},
 	}
 
-	b, _ := json.Marshal(body)
+	b, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal openai request: %w", err)
+	}
 
-	req, _ := http.NewRequestWithContext(
+	req, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
 		"https://api.openai.com/v1/chat/completions",
 		bytes.NewReader(b),
 	)
+	if err != nil {
+		return "", fmt.Errorf("build openai request: %w", err)
+	}
 
 	req.Header.Set("Authorization", "Bearer "+o.Key)
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := o.client.Do(req)
 	if err != nil {
 		return "", err
 	}

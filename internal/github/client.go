@@ -50,7 +50,10 @@ func (c *client) getToken(ctx context.Context) (string, error) {
 		c.cfg.GithubInstallationID,
 	)
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("build token request: %w", err)
+	}
 
 	req.Header.Set("Authorization", "Bearer "+jwt)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -61,12 +64,22 @@ func (c *client) getToken(ctx context.Context) (string, error) {
 	}
 	defer res.Body.Close()
 
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		return "", fmt.Errorf("github token status %d: %s", res.StatusCode, string(msg))
+	}
+
 	var r struct {
 		Token     string `json:"token"`
 		ExpiresAt string `json:"expires_at"`
 	}
 
-	_ = json.NewDecoder(res.Body).Decode(&r)
+	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+		return "", fmt.Errorf("decode token response: %w", err)
+	}
+	if r.Token == "" {
+		return "", fmt.Errorf("empty installation token")
+	}
 
 	c.cache.Set(r.Token, 50*time.Minute)
 
@@ -89,7 +102,10 @@ func (c *client) GetPRFiles(ctx context.Context, repo string, pr int) ([]PRFile,
 			repo, pr,
 		)
 
-		req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return fmt.Errorf("build files request: %w", err)
+		}
 
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Accept", "application/vnd.github+json")
@@ -103,10 +119,20 @@ func (c *client) GetPRFiles(ctx context.Context, repo string, pr int) ([]PRFile,
 		if res.StatusCode == 403 {
 			return fmt.Errorf("rate limited")
 		}
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+			return fmt.Errorf("github files status %d: %s", res.StatusCode, string(msg))
+		}
 
-		b, _ := io.ReadAll(res.Body)
+		b, err := io.ReadAll(res.Body)
+		if err != nil {
+			return fmt.Errorf("read files response: %w", err)
+		}
 
-		return json.Unmarshal(b, &files)
+		if err := json.Unmarshal(b, &files); err != nil {
+			return fmt.Errorf("decode files response: %w", err)
+		}
+		return nil
 	})
 
 	// Filter only reviewable files
@@ -137,7 +163,10 @@ func (c *client) GetPRDiff(ctx context.Context, repo string, pr int) (string, er
 		repo, pr,
 	)
 
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("build diff request: %w", err)
+	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github.diff")
@@ -152,7 +181,10 @@ func (c *client) GetPRDiff(ctx context.Context, repo string, pr int) (string, er
 		return "", fmt.Errorf("github status: %d", res.StatusCode)
 	}
 
-	b, _ := io.ReadAll(res.Body)
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("read diff response: %w", err)
+	}
 
 	return string(b), nil
 }
@@ -169,7 +201,10 @@ func (c *client) installationToken(ctx context.Context) (string, error) {
 		c.cfg.GithubInstallationID,
 	)
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("build installation token request: %w", err)
+	}
 	req.Header.Set("Authorization", "Bearer "+jwt)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
@@ -178,6 +213,11 @@ func (c *client) installationToken(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		return "", fmt.Errorf("github installation token status %d: %s", res.StatusCode, string(msg))
+	}
 
 	var r struct {
 		Token string `json:"token"`
@@ -211,7 +251,12 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	return pkcs8.(*rsa.PrivateKey), nil
+	privateKey, ok := pkcs8.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("pkcs8 key is not RSA")
+	}
+
+	return privateKey, nil
 }
 
 func (c *client) createJWT() (string, error) {

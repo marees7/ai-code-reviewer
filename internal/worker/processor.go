@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -57,18 +58,21 @@ func (p *Processor) Start(ctx context.Context) {
 		for {
 			job, err := p.queue.Pop(ctx)
 			if err != nil {
+				if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					return
+				}
 				continue
 			}
 
-			p.handle(job)
+			p.handle(ctx, job)
 		}
 	}()
 }
 
-func (p *Processor) handle(j Job) {
+func (p *Processor) handle(parent context.Context, j Job) {
 
 	ctx, cancel := context.WithTimeout(
-		context.Background(),
+		parent,
 		90*time.Second,
 	)
 	defer cancel()
@@ -83,7 +87,11 @@ func (p *Processor) handle(j Job) {
 
 	for _, f := range files {
 
-		parsed, _ := diff.Parse(f.Patch)
+		parsed, err := diff.Parse(f.Patch)
+		if err != nil {
+			p.logger.Error("diff parse failed", "file", f.Filename, "err", err)
+			continue
+		}
 
 		for _, pf := range parsed {
 

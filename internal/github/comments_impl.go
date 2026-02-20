@@ -5,15 +5,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"time"
 )
 
 type CommentService struct {
 	token string
+	http  *http.Client
 }
 
 func NewCommentService(token string) *CommentService {
-	return &CommentService{token: token}
+	return &CommentService{
+		token: token,
+		http: &http.Client{
+			Timeout: 15 * time.Second,
+		},
+	}
 }
 
 func (c *CommentService) CreateComment(
@@ -33,27 +41,35 @@ func (c *CommentService) CreateComment(
 		"body": body,
 	}
 
-	b, _ := json.Marshal(payload)
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal comment payload: %w", err)
+	}
 
-	req, _ := http.NewRequestWithContext(
+	req, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
 		url,
 		bytes.NewReader(b),
 	)
+	if err != nil {
+		return fmt.Errorf("build comment request: %w", err)
+	}
 
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "ai-code-reviewer")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode >= 300 {
-		return fmt.Errorf("github status %d", res.StatusCode)
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		return fmt.Errorf("github status %d: %s", res.StatusCode, string(msg))
 	}
 
 	return nil

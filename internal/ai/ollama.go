@@ -4,18 +4,25 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"time"
 )
 
 type OllamaProvider struct {
-	url   string
-	model string
+	url    string
+	model  string
+	client *http.Client
 }
 
 func NewOllama(url, model string) *OllamaProvider {
 	return &OllamaProvider{
 		url:   url,
 		model: model,
+		client: &http.Client{
+			Timeout: 60 * time.Second,
+		},
 	}
 }
 
@@ -40,25 +47,38 @@ func (o *OllamaProvider) Review(
 		Stream: false,
 	}
 
-	b, _ := json.Marshal(reqBody)
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("marshal ollama request: %w", err)
+	}
 
-	req, _ := http.NewRequestWithContext(
+	req, err := http.NewRequestWithContext(
 		ctx,
 		"POST",
 		o.url+"/api/generate",
 		bytes.NewBuffer(b),
 	)
+	if err != nil {
+		return "", fmt.Errorf("build ollama request: %w", err)
+	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := o.client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("ollama status %d: %s", resp.StatusCode, string(msg))
+	}
+
 	var out ollamaResponse
-	json.NewDecoder(resp.Body).Decode(&out)
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("decode ollama response: %w", err)
+	}
 
 	return out.Response, nil
 }
