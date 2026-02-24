@@ -1,6 +1,7 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
@@ -153,7 +154,7 @@ func (c *client) GetPRFiles(ctx context.Context, repo string, pr int) ([]PRFile,
 
 func (c *client) GetPRDiff(ctx context.Context, repo string, pr int) (string, error) {
 
-	token, err := c.installationToken(ctx)
+	token, err := c.getToken(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -187,47 +188,6 @@ func (c *client) GetPRDiff(ctx context.Context, repo string, pr int) (string, er
 	}
 
 	return string(b), nil
-}
-
-func (c *client) installationToken(ctx context.Context) (string, error) {
-
-	jwt, err := c.createJWT()
-	if err != nil {
-		return "", err
-	}
-
-	url := fmt.Sprintf(
-		"https://api.github.com/app/installations/%s/access_tokens",
-		c.cfg.GithubInstallationID,
-	)
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
-	if err != nil {
-		return "", fmt.Errorf("build installation token request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+jwt)
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	res, err := c.http.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-		return "", fmt.Errorf("github installation token status %d: %s", res.StatusCode, string(msg))
-	}
-
-	var r struct {
-		Token string `json:"token"`
-	}
-
-	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-		return "", err
-	}
-
-	return r.Token, nil
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
@@ -279,8 +239,90 @@ func (c *client) createJWT() (string, error) {
 	return token.SignedString(key)
 }
 
-// create comment
 func (c *client) CreateComment(ctx context.Context, repo string, pr int, body string) error {
-	// Todo: implement this method to create a comment on the PR using GitHub API
+	token, err := c.getToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf(
+		"https://api.github.com/repos/%s/issues/%d/comments",
+		repo, pr,
+	)
+
+	payload := map[string]string{"body": body}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal comment payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(b))
+	if err != nil {
+		return fmt.Errorf("build comment request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "ai-code-reviewer")
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		return fmt.Errorf("github status %d: %s", res.StatusCode, string(msg))
+	}
+
+	return nil
+}
+
+func (c *client) CreateLineComment(
+	ctx context.Context,
+	repo string,
+	pr int,
+	l LineComment,
+) error {
+	token, err := c.getToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf(
+		"https://api.github.com/repos/%s/pulls/%d/comments",
+		repo, pr,
+	)
+
+	b, err := json.Marshal(l)
+	if err != nil {
+		return fmt.Errorf("marshal line comment: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx, "POST", url, bytes.NewReader(b),
+	)
+	if err != nil {
+		return fmt.Errorf("build line comment request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "ai-code-reviewer")
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		return fmt.Errorf("github %d: %s", res.StatusCode, string(msg))
+	}
+
 	return nil
 }

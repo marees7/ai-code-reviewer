@@ -41,10 +41,6 @@ func (s *Server) routes() {
 		adapter,
 	)
 
-	commenter := github.NewCommentService(
-		s.cfg.GitHubToken,
-	)
-
 	provider := ai.NewProvider(s.cfg)
 
 	// add circuit breaker
@@ -68,7 +64,7 @@ func (s *Server) routes() {
 	processor := worker.NewProcessor(
 		queue,
 		ghClient,
-		commenter,
+		ghClient,
 		dedup,
 		s.logger,
 		fallback,

@@ -15,7 +15,6 @@ type Config struct {
 	GithubPrivateKeyPath string
 	GithubAppID          string
 	GithubInstallationID string
-	GitHubToken          string
 	OpenAIKey            string
 	OpenAIModel          string
 	RedisAddr            string
@@ -40,7 +39,6 @@ func Load() *Config {
 		GithubInstallationID: getEnv("GITHUB_APP_INSTALLATION_ID", ""),
 		OpenAIKey:            getEnv("OPENAI_KEY", ""),
 		OpenAIModel:          getEnv("OPENAI_MODEL", "gpt-3.5-turbo"),
-		GitHubToken:          getEnv("GITHUB_TOKEN", ""),
 		RedisAddr:            getEnv("REDIS_ADDR", "localhost:6379"),
 		QueueType:            getEnv("QUEUE_TYPE", "memory"), // memory | redis
 		RateLimitRPS:         getEnvInt("RATE_LIMIT_RPS", 2),

@@ -6,4 +6,5 @@ type Client interface {
 	GetPRFiles(ctx context.Context, repo string, pr int) ([]PRFile, error)
 	GetPRDiff(ctx context.Context, repo string, pr int) (string, error)
 	CreateComment(ctx context.Context, repo string, pr int, body string) error
+	CreateLineComment(ctx context.Context, repo string, pr int, comment LineComment) error
 }
