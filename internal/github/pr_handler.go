@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+const (
+	prActionOpened      = "opened"
+	prActionSynchronize = "synchronize"
+	botLoginToken       = "bot"
+	enqueueTimeout      = 3 * time.Second
+)
+
 func (h *WebhookHandler) handlePullRequest(payload []byte) {
 
 	var event PullRequestEvent
@@ -34,7 +41,7 @@ func (h *WebhookHandler) handlePullRequest(payload []byte) {
 	// Ignore bots
 	if strings.Contains(
 		strings.ToLower(event.PullRequest.User.Login),
-		"bot",
+		botLoginToken,
 	) {
 		h.logger.Info("bot pr ignored",
 			"user", event.PullRequest.User.Login,
@@ -43,8 +50,8 @@ func (h *WebhookHandler) handlePullRequest(payload []byte) {
 	}
 
 	// Only specific actions
-	if event.Action != "opened" &&
-		event.Action != "synchronize" {
+	if event.Action != prActionOpened &&
+		event.Action != prActionSynchronize {
 		h.logger.Info("action ignored",
 			"action", event.Action,
 		)
@@ -57,7 +64,7 @@ func (h *WebhookHandler) handlePullRequest(payload []byte) {
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		3*time.Second,
+		enqueueTimeout,
 	)
 	defer cancel()
 

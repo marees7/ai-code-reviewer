@@ -1,8 +1,14 @@
 package observability
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 var (
+	registerMetricsOnce sync.Once
+
 	AICalls = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ai_reviewer_ai_calls_total",
@@ -30,5 +36,7 @@ var (
 )
 
 func InitMetrics() {
-	prometheus.MustRegister(AICalls, AIErrors, AILatency)
+	registerMetricsOnce.Do(func() {
+		prometheus.MustRegister(AICalls, AIErrors, AILatency)
+	})
 }

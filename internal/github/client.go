@@ -26,6 +26,16 @@ type client struct {
 	cache  *tokenCache
 }
 
+const (
+	githubAcceptJSON      = "application/vnd.github+json"
+	githubAcceptDiff      = "application/vnd.github.diff"
+	githubContentTypeJSON = "application/json"
+	githubUserAgent       = "ai-code-reviewer"
+	httpStatusOK          = 200
+	httpStatusForbidden   = 403
+	maxResponseBodyLog    = 4096
+)
+
 func NewClient(cfg *config.Config, logger *observability.Logger) Client {
 	return &client{
 		cfg:    cfg,
@@ -57,7 +67,7 @@ func (c *client) getToken(ctx context.Context) (string, error) {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+jwt)
-	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Accept", githubAcceptJSON)
 
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -66,7 +76,7 @@ func (c *client) getToken(ctx context.Context) (string, error) {
 	defer res.Body.Close()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, maxResponseBodyLog))
 		return "", fmt.Errorf("github token status %d: %s", res.StatusCode, string(msg))
 	}
 
@@ -109,7 +119,7 @@ func (c *client) GetPRFiles(ctx context.Context, repo string, pr int) ([]PRFile,
 		}
 
 		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("Accept", githubAcceptJSON)
 
 		res, err := c.http.Do(req)
 		if err != nil {
@@ -117,11 +127,11 @@ func (c *client) GetPRFiles(ctx context.Context, repo string, pr int) ([]PRFile,
 		}
 		defer res.Body.Close()
 
-		if res.StatusCode == 403 {
+		if res.StatusCode == httpStatusForbidden {
 			return fmt.Errorf("rate limited")
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+			msg, _ := io.ReadAll(io.LimitReader(res.Body, maxResponseBodyLog))
 			return fmt.Errorf("github files status %d: %s", res.StatusCode, string(msg))
 		}
 
@@ -170,7 +180,7 @@ func (c *client) GetPRDiff(ctx context.Context, repo string, pr int) (string, er
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.github.diff")
+	req.Header.Set("Accept", githubAcceptDiff)
 
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -178,7 +188,7 @@ func (c *client) GetPRDiff(ctx context.Context, repo string, pr int) (string, er
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != httpStatusOK {
 		return "", fmt.Errorf("github status: %d", res.StatusCode)
 	}
 
@@ -262,9 +272,9 @@ func (c *client) CreateComment(ctx context.Context, repo string, pr int, body st
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "ai-code-reviewer")
+	req.Header.Set("Content-Type", githubContentTypeJSON)
+	req.Header.Set("Accept", githubAcceptJSON)
+	req.Header.Set("User-Agent", githubUserAgent)
 
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -273,7 +283,7 @@ func (c *client) CreateComment(ctx context.Context, repo string, pr int, body st
 	defer res.Body.Close()
 
 	if res.StatusCode >= 300 {
-		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, maxResponseBodyLog))
 		return fmt.Errorf("github status %d: %s", res.StatusCode, string(msg))
 	}
 
@@ -309,9 +319,9 @@ func (c *client) CreateLineComment(
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "ai-code-reviewer")
+	req.Header.Set("Content-Type", githubContentTypeJSON)
+	req.Header.Set("Accept", githubAcceptJSON)
+	req.Header.Set("User-Agent", githubUserAgent)
 
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -320,7 +330,7 @@ func (c *client) CreateLineComment(
 	defer res.Body.Close()
 
 	if res.StatusCode >= 300 {
-		msg, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, maxResponseBodyLog))
 		return fmt.Errorf("github %d: %s", res.StatusCode, string(msg))
 	}
 

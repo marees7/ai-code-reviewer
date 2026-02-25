@@ -31,6 +31,20 @@ type Processor struct {
 	rateLimiter *ratelimit.Limiter
 }
 
+const (
+	chunkerTokenLimit   = 3000
+	processorTimeout    = 90 * time.Second
+	githubCommentSide   = "RIGHT"
+	defaultAIProvider   = "primary"
+	defaultSeverity     = "medium"
+	retryAttempts       = 3
+	retryBackoff        = time.Second
+	summaryTitle        = "## AI Review Summary"
+	noIssuesSummaryText = "No issues detected in the analyzed diff."
+)
+
+var knownSeverities = []string{"critical", "high", "medium", "low"}
+
 type reviewSummary struct {
 	TotalIssues      int
 	PostedComments   int
@@ -53,7 +67,7 @@ func NewProcessor(
 		comments:    comments,
 		dedup:       d,
 		logger:      l,
-		chunker:     chunker.New(3000),
+		chunker:     chunker.New(chunkerTokenLimit),
 		ai:          a,
 		rateLimiter: rl,
 	}
@@ -80,7 +94,7 @@ func (p *Processor) handle(parent context.Context, j Job) {
 
 	ctx, cancel := context.WithTimeout(
 		parent,
-		90*time.Second,
+		processorTimeout,
 	)
 	defer cancel()
 
@@ -92,12 +106,7 @@ func (p *Processor) handle(parent context.Context, j Job) {
 
 	limiter := p.rateLimiter.Get(j.Repo)
 	summary := reviewSummary{
-		SeverityCounters: map[string]int{
-			"critical": 0,
-			"high":     0,
-			"medium":   0,
-			"low":      0,
-		},
+		SeverityCounters: buildSeverityCounter(),
 	}
 
 	for _, f := range files {
@@ -133,7 +142,7 @@ func (p *Processor) handle(parent context.Context, j Job) {
 				duration := time.Since(startTime).Seconds()
 
 				//Later we can make this as dynamic
-				provider := "primary"
+				provider := defaultAIProvider
 
 				observability.AICalls.WithLabelValues(provider).Inc()
 				observability.AILatency.WithLabelValues(provider).Observe(duration)
@@ -157,7 +166,10 @@ func (p *Processor) handle(parent context.Context, j Job) {
 
 					sev := strings.ToLower(strings.TrimSpace(is.Severity))
 					if sev == "" {
-						sev = "medium"
+						sev = defaultSeverity
+					}
+					if _, ok := summary.SeverityCounters[sev]; !ok {
+						sev = defaultSeverity
 					}
 					summary.SeverityCounters[sev]++
 
@@ -175,13 +187,13 @@ func (p *Processor) handle(parent context.Context, j Job) {
 					}
 
 					comment := github.LineComment{
-						Body: is.Suggestion,
+						Body: commentBody(is),
 						Path: ch.File,
 						Line: is.Line,
-						Side: "RIGHT",
+						Side: githubCommentSide,
 					}
 
-					err = retry.Do(ctx, 3, time.Second, func() error {
+					err = retry.Do(ctx, retryAttempts, retryBackoff, func() error {
 						return p.comments.CreateLineComment(
 							ctx, j.Repo, j.PR, comment,
 						)
@@ -212,7 +224,7 @@ func (p *Processor) handle(parent context.Context, j Job) {
 		return
 	}
 
-	if err := retry.Do(ctx, 3, time.Second, func() error {
+	if err := retry.Do(ctx, retryAttempts, retryBackoff, func() error {
 		return p.comments.CreateComment(ctx, j.Repo, j.PR, body)
 	}); err != nil {
 		p.logger.Error("summary comment failed", "err", err)
@@ -226,11 +238,11 @@ func hash(s string) string {
 
 func formatSummaryComment(s reviewSummary) string {
 	if s.TotalIssues == 0 {
-		return "## AI Review Summary\n\nNo issues detected in the analyzed diff."
+		return summaryTitle + "\n\n" + noIssuesSummaryText
 	}
 
 	return fmt.Sprintf(
-		"## AI Review Summary\n\n"+
+		summaryTitle+"\n\n"+
 			"- Total issues found: %d\n"+
 			"- Line comments posted: %d\n"+
 			"- Critical: %d\n"+
@@ -244,4 +256,22 @@ func formatSummaryComment(s reviewSummary) string {
 		s.SeverityCounters["medium"],
 		s.SeverityCounters["low"],
 	)
+}
+
+func buildSeverityCounter() map[string]int {
+	out := make(map[string]int, len(knownSeverities))
+	for _, sev := range knownSeverities {
+		out[sev] = 0
+	}
+	return out
+}
+
+func commentBody(issue review.Issue) string {
+	if strings.TrimSpace(issue.Suggestion) != "" {
+		return issue.Suggestion
+	}
+	if strings.TrimSpace(issue.Title) != "" {
+		return issue.Title
+	}
+	return "Potential issue detected by AI reviewer."
 }

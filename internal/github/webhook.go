@@ -14,22 +14,24 @@ import (
 type WebhookHandler struct {
 	cfg    *config.Config
 	logger *observability.Logger
-	client Client // ← ADD THIS
 	queue  JobQueue
 }
 
-const maxWebhookBodyBytes = 1 << 20 // 1 MiB
+const (
+	maxWebhookBodyBytes = 1 << 20 // 1 MiB
+	headerGithubEvent   = "X-GitHub-Event"
+	headerSignature256  = "X-Hub-Signature-256"
+	eventPullRequest    = "pull_request"
+)
 
 func NewWebhookHandler(
 	cfg *config.Config,
 	logger *observability.Logger,
-	client Client, // ← inject
 	queue JobQueue,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		cfg:    cfg,
 		logger: logger,
-		client: client,
 		queue:  queue,
 	}
 }
@@ -48,21 +50,17 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify signature
-	if !h.verifySignature(r.Header.Get("X-Hub-Signature-256"), payload) {
+	if !h.verifySignature(r.Header.Get(headerSignature256), payload) {
 		h.logger.Error("invalid github signature")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	event := r.Header.Get("X-GitHub-Event")
-
-	h.logger.Info("github event received",
-		"event", event,
-	)
+	event := r.Header.Get(headerGithubEvent)
+	h.logger.Info("github event received", "event", event)
 
 	switch event {
-	case "pull_request":
+	case eventPullRequest:
 		h.handlePullRequest(payload)
 	default:
 		h.logger.Info("event ignored", "event", event)

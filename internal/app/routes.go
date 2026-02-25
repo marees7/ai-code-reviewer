@@ -14,6 +14,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const (
+	healthPath        = "/health"
+	metricsPath       = "/metrics"
+	githubWebhookPath = "/webhook/github"
+)
+
 func (s *Server) routes() {
 	if s.http == nil {
 		return
@@ -21,7 +27,7 @@ func (s *Server) routes() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/health", s.health)
+	mux.HandleFunc(healthPath, s.health)
 	// create core queue
 
 	// create queue based on config
@@ -37,7 +43,6 @@ func (s *Server) routes() {
 	gh := github.NewWebhookHandler(
 		s.cfg,
 		s.logger,
-		ghClient,
 		adapter,
 	)
 
@@ -74,8 +79,8 @@ func (s *Server) routes() {
 	// init metrics
 	observability.InitMetrics()
 
-	mux.HandleFunc("/webhook/github", gh.Handle)
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc(githubWebhookPath, gh.Handle)
+	mux.Handle(metricsPath, promhttp.Handler())
 
 	processor.Start(context.Background())
 
