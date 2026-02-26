@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"ai-code-reviewer/internal/ai"
+	"ai-code-reviewer/internal/budget"
 	"ai-code-reviewer/internal/dedup"
 	"ai-code-reviewer/internal/github"
 	"ai-code-reviewer/internal/observability"
@@ -74,6 +75,12 @@ func (s *Server) routes() {
 		s.logger,
 		fallback,
 		rateLimiter,
+		budget.NewGuard(
+			s.cfg.BudgetEnabled,
+			s.cfg.BudgetDailyUSD,
+			s.cfg.BudgetPerPRUSD,
+			budget.NewMemoryStore(),
+		),
 	)
 
 	// init metrics

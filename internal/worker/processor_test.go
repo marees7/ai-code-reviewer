@@ -34,6 +34,7 @@ func (s *ProcessorSuite) SetupTest() {
 		nil,
 		s.ai,
 		ratelimit.New(1, 1),
+		nil,
 	)
 }
 

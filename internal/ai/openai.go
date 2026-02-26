@@ -26,7 +26,7 @@ func NewOpenAI(key, model string) *OpenAI {
 	}
 }
 
-func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
+func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (ReviewResponse, error) {
 
 	prompt := BuildPrompt(r)
 
@@ -40,7 +40,7 @@ func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
 
 	b, err := json.Marshal(body)
 	if err != nil {
-		return "", fmt.Errorf("marshal openai request: %w", err)
+		return ReviewResponse{}, fmt.Errorf("marshal openai request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -50,7 +50,7 @@ func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
 		bytes.NewReader(b),
 	)
 	if err != nil {
-		return "", fmt.Errorf("build openai request: %w", err)
+		return ReviewResponse{}, fmt.Errorf("build openai request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+o.Key)
@@ -58,30 +58,45 @@ func (o *OpenAI) Review(ctx context.Context, r ReviewRequest) (string, error) {
 
 	res, err := o.client.Do(req)
 	if err != nil {
-		return "", err
+		return ReviewResponse{}, err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode >= 300 {
 		b, _ := io.ReadAll(res.Body)
-		return "", fmt.Errorf("openai status %d: %s", res.StatusCode, string(b))
+		return ReviewResponse{}, fmt.Errorf("openai status %d: %s", res.StatusCode, string(b))
 	}
 
 	var out struct {
+		Model   string `json:"model"`
 		Choices []struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 	}
 
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
-		return "", err
+		return ReviewResponse{}, err
 	}
 
 	if len(out.Choices) == 0 {
-		return "", fmt.Errorf("no response")
+		return ReviewResponse{}, fmt.Errorf("no response")
 	}
 
-	return out.Choices[0].Message.Content, nil
+	return ReviewResponse{
+		Content:  out.Choices[0].Message.Content,
+		Provider: "openai",
+		Model:    out.Model,
+		Usage: Usage{
+			PromptTokens:     out.Usage.PromptTokens,
+			CompletionTokens: out.Usage.CompletionTokens,
+			TotalTokens:      out.Usage.TotalTokens,
+		},
+	}, nil
 }

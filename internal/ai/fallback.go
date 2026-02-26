@@ -17,7 +17,7 @@ func NewFallback(p1, p2 Provider) *FallbackProvider {
 func (f *FallbackProvider) Review(
 	ctx context.Context,
 	r ReviewRequest,
-) (string, error) {
+) (ReviewResponse, error) {
 
 	resp, err := f.primary.Review(ctx, r)
 	if err == nil {

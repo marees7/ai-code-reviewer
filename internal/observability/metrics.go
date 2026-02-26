@@ -33,10 +33,34 @@ var (
 		},
 		[]string{"provider"},
 	)
+
+	AITokens = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ai_reviewer_ai_tokens_total",
+			Help: "Total AI tokens",
+		},
+		[]string{"provider", "model", "type"},
+	)
+
+	AICostUSD = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ai_reviewer_ai_cost_usd_total",
+			Help: "Total estimated AI cost in USD",
+		},
+		[]string{"provider", "model"},
+	)
+
+	AIBudgetBlocks = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ai_reviewer_budget_block_total",
+			Help: "Total budget block events",
+		},
+		[]string{"scope"},
+	)
 )
 
 func InitMetrics() {
 	registerMetricsOnce.Do(func() {
-		prometheus.MustRegister(AICalls, AIErrors, AILatency)
+		prometheus.MustRegister(AICalls, AIErrors, AILatency, AITokens, AICostUSD, AIBudgetBlocks)
 	})
 }

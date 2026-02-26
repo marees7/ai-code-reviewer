@@ -23,22 +23,22 @@ func (_m *Provider) EXPECT() *Provider_Expecter {
 }
 
 // Review provides a mock function with given fields: ctx, r
-func (_m *Provider) Review(ctx context.Context, r ai.ReviewRequest) (string, error) {
+func (_m *Provider) Review(ctx context.Context, r ai.ReviewRequest) (ai.ReviewResponse, error) {
 	ret := _m.Called(ctx, r)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Review")
 	}
 
-	var r0 string
+	var r0 ai.ReviewResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, ai.ReviewRequest) (string, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, ai.ReviewRequest) (ai.ReviewResponse, error)); ok {
 		return rf(ctx, r)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, ai.ReviewRequest) string); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, ai.ReviewRequest) ai.ReviewResponse); ok {
 		r0 = rf(ctx, r)
 	} else {
-		r0 = ret.Get(0).(string)
+		r0 = ret.Get(0).(ai.ReviewResponse)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, ai.ReviewRequest) error); ok {
@@ -69,12 +69,12 @@ func (_c *Provider_Review_Call) Run(run func(ctx context.Context, r ai.ReviewReq
 	return _c
 }
 
-func (_c *Provider_Review_Call) Return(_a0 string, _a1 error) *Provider_Review_Call {
+func (_c *Provider_Review_Call) Return(_a0 ai.ReviewResponse, _a1 error) *Provider_Review_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *Provider_Review_Call) RunAndReturn(run func(context.Context, ai.ReviewRequest) (string, error)) *Provider_Review_Call {
+func (_c *Provider_Review_Call) RunAndReturn(run func(context.Context, ai.ReviewRequest) (ai.ReviewResponse, error)) *Provider_Review_Call {
 	_c.Call.Return(run)
 	return _c
 }

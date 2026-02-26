@@ -23,6 +23,9 @@ type Config struct {
 	OllamaModel          string
 	RateLimitRPS         int
 	RateLimitBurst       int
+	BudgetEnabled        bool
+	BudgetDailyUSD       float64
+	BudgetPerPRUSD       float64
 }
 
 func Load() *Config {
@@ -43,6 +46,9 @@ func Load() *Config {
 		QueueType:            getEnv("QUEUE_TYPE", "memory"), // memory | redis
 		RateLimitRPS:         getEnvInt("RATE_LIMIT_RPS", 2),
 		RateLimitBurst:       getEnvInt("RATE_LIMIT_BURST", 4),
+		BudgetEnabled:        getEnvBool("BUDGET_ENABLED", false),
+		BudgetDailyUSD:       getEnvFloat("BUDGET_DAILY_USD", 10.0),
+		BudgetPerPRUSD:       getEnvFloat("BUDGET_PER_PR_USD", 1.0),
 	}
 }
 
@@ -64,4 +70,28 @@ func getEnvInt(key string, def int) int {
 		log.Fatalf("invalid env %s: %v", key, err)
 	}
 	return i
+}
+
+func getEnvFloat(key string, def float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		log.Fatalf("invalid env %s: %v", key, err)
+	}
+	return f
+}
+
+func getEnvBool(key string, def bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		log.Fatalf("invalid env %s: %v", key, err)
+	}
+	return b
 }

@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"ai-code-reviewer/internal/ai"
+	"ai-code-reviewer/internal/budget"
 	"ai-code-reviewer/internal/chunker"
+	"ai-code-reviewer/internal/cost"
 	"ai-code-reviewer/internal/dedup"
 	"ai-code-reviewer/internal/diff"
 	"ai-code-reviewer/internal/github"
@@ -29,6 +31,7 @@ type Processor struct {
 	chunker     *chunker.Chunker
 	ai          ai.Provider
 	rateLimiter *ratelimit.Limiter
+	budgetGuard *budget.Guard
 }
 
 const (
@@ -41,6 +44,7 @@ const (
 	retryBackoff        = time.Second
 	summaryTitle        = "## AI Review Summary"
 	noIssuesSummaryText = "No issues detected in the analyzed diff."
+	budgetStoppedPrefix = "Budget guard triggered"
 )
 
 var knownSeverities = []string{"critical", "high", "medium", "low"}
@@ -49,6 +53,9 @@ type reviewSummary struct {
 	TotalIssues      int
 	PostedComments   int
 	SeverityCounters map[string]int
+	CostUSD          float64
+	BudgetStopped    bool
+	BudgetReason     string
 }
 
 func NewProcessor(
@@ -59,6 +66,7 @@ func NewProcessor(
 	l *observability.Logger,
 	a ai.Provider,
 	rl *ratelimit.Limiter,
+	bg *budget.Guard,
 ) *Processor {
 
 	return &Processor{
@@ -70,6 +78,7 @@ func NewProcessor(
 		chunker:     chunker.New(chunkerTokenLimit),
 		ai:          a,
 		rateLimiter: rl,
+		budgetGuard: bg,
 	}
 }
 
@@ -109,6 +118,7 @@ func (p *Processor) handle(parent context.Context, j Job) {
 		SeverityCounters: buildSeverityCounter(),
 	}
 
+processing:
 	for _, f := range files {
 
 		parsed, err := diff.Parse(f.Patch)
@@ -124,8 +134,19 @@ func (p *Processor) handle(parent context.Context, j Job) {
 			chunks := p.chunker.Split(pf.Filename, content)
 
 			for _, ch := range chunks {
+				allowed, reason, err := p.budgetGuard.Allow(ctx, j.Repo, j.PR, 0, time.Now())
+				if err != nil {
+					p.logger.Error("budget guard check failed", "err", err)
+					return
+				}
+				if !allowed {
+					summary.BudgetStopped = true
+					summary.BudgetReason = reason
+					observability.AIBudgetBlocks.WithLabelValues("guard").Inc()
+					break processing
+				}
 
-				err := limiter.Wait(ctx)
+				err = limiter.Wait(ctx)
 				if err != nil {
 					p.logger.Error("rate limiter error", "err", err)
 					return
@@ -133,7 +154,7 @@ func (p *Processor) handle(parent context.Context, j Job) {
 
 				startTime := time.Now()
 
-				reviewText, err :=
+				reviewResp, err :=
 					p.ai.Review(ctx, ai.ReviewRequest{
 						File:    ch.File,
 						Content: ch.Content,
@@ -142,7 +163,14 @@ func (p *Processor) handle(parent context.Context, j Job) {
 				duration := time.Since(startTime).Seconds()
 
 				//Later we can make this as dynamic
-				provider := defaultAIProvider
+				provider := reviewResp.Provider
+				if provider == "" {
+					provider = defaultAIProvider
+				}
+				model := reviewResp.Model
+				if model == "" {
+					model = "unknown"
+				}
 
 				observability.AICalls.WithLabelValues(provider).Inc()
 				observability.AILatency.WithLabelValues(provider).Observe(duration)
@@ -153,7 +181,18 @@ func (p *Processor) handle(parent context.Context, j Job) {
 					continue
 				}
 
-				result, err := review.ParseResult(reviewText)
+				callCostUSD := cost.EstimateUSD(model, reviewResp.Usage.PromptTokens, reviewResp.Usage.CompletionTokens)
+				summary.CostUSD += callCostUSD
+				observability.AITokens.WithLabelValues(provider, model, "prompt").Add(float64(reviewResp.Usage.PromptTokens))
+				observability.AITokens.WithLabelValues(provider, model, "completion").Add(float64(reviewResp.Usage.CompletionTokens))
+				observability.AICostUSD.WithLabelValues(provider, model).Add(callCostUSD)
+
+				if err := p.budgetGuard.Record(ctx, j.Repo, j.PR, callCostUSD, time.Now()); err != nil {
+					p.logger.Error("budget guard record failed", "err", err)
+					return
+				}
+
+				result, err := review.ParseResult(reviewResp.Content)
 				if err != nil {
 					p.logger.Error("invalid ai json",
 						"err", err,
@@ -213,7 +252,8 @@ func (p *Processor) handle(parent context.Context, j Job) {
 
 				p.logger.Info("AI REVIEW",
 					"file", ch.File,
-					"review", reviewText,
+					"review", reviewResp.Content,
+					"cost_usd", callCostUSD,
 				)
 			}
 		}
@@ -238,23 +278,32 @@ func hash(s string) string {
 
 func formatSummaryComment(s reviewSummary) string {
 	if s.TotalIssues == 0 {
-		return summaryTitle + "\n\n" + noIssuesSummaryText
+		return fmt.Sprintf(
+			"%s\n\n%s\n- Estimated cost (USD): %.6f%s",
+			summaryTitle,
+			noIssuesSummaryText,
+			s.CostUSD,
+			budgetNote(s),
+		)
 	}
 
 	return fmt.Sprintf(
 		summaryTitle+"\n\n"+
 			"- Total issues found: %d\n"+
 			"- Line comments posted: %d\n"+
+			"- Estimated cost (USD): %.6f\n"+
 			"- Critical: %d\n"+
 			"- High: %d\n"+
 			"- Medium: %d\n"+
-			"- Low: %d",
+			"- Low: %d%s",
 		s.TotalIssues,
 		s.PostedComments,
+		s.CostUSD,
 		s.SeverityCounters["critical"],
 		s.SeverityCounters["high"],
 		s.SeverityCounters["medium"],
 		s.SeverityCounters["low"],
+		budgetNote(s),
 	)
 }
 
@@ -274,4 +323,14 @@ func commentBody(issue review.Issue) string {
 		return issue.Title
 	}
 	return "Potential issue detected by AI reviewer."
+}
+
+func budgetNote(s reviewSummary) string {
+	if !s.BudgetStopped {
+		return ""
+	}
+	if strings.TrimSpace(s.BudgetReason) == "" {
+		return "\n- " + budgetStoppedPrefix
+	}
+	return "\n- " + budgetStoppedPrefix + ": " + s.BudgetReason
 }
