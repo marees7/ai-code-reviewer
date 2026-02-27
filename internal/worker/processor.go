@@ -35,18 +35,18 @@ type Processor struct {
 }
 
 const (
-	chunkerTokenLimit   = 3000
-	processorTimeout    = 90 * time.Second
-	githubCommentSide   = "RIGHT"
-	defaultAIProvider   = "primary"
-	defaultSeverity     = "medium"
+	chunkerTokenLimit    = 3000
+	processorTimeout     = 90 * time.Second
+	githubCommentSide    = "RIGHT"
+	defaultAIProvider    = "primary"
+	defaultSeverity      = "medium"
 	commentRetryAttempts = 3
 	commentRetryBackoff  = time.Second
 	aiRetryAttempts      = 3
 	aiRetryBackoff       = 500 * time.Millisecond
-	summaryTitle        = "## AI Review Summary"
-	noIssuesSummaryText = "No issues detected in the analyzed diff."
-	budgetStoppedPrefix = "Budget guard triggered"
+	summaryTitle         = "## AI Review Summary"
+	noIssuesSummaryText  = "No issues detected in the analyzed diff."
+	budgetStoppedPrefix  = "Budget guard triggered"
 )
 
 var knownSeverities = []string{"critical", "high", "medium", "low"}
@@ -157,9 +157,9 @@ processing:
 				startTime := time.Now()
 
 				reviewResp, err := p.reviewWithRetry(ctx, ai.ReviewRequest{
-						File:    ch.File,
-						Content: ch.Content,
-					})
+					File:    ch.File,
+					Content: ch.Content,
+				})
 
 				duration := time.Since(startTime).Seconds()
 
