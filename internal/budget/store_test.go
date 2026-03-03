@@ -14,10 +14,11 @@ func TestGuardBlocksWhenPRLimitExceeded(t *testing.T) {
 
 	ctx := context.Background()
 	now := time.Now().UTC()
+	tenant := "tenant-a"
 
-	require.NoError(t, g.Record(ctx, "acme/repo", 1, 0.9, now))
+	require.NoError(t, g.Record(ctx, tenant, "acme/repo", 1, 0.9, now))
 
-	allowed, reason, err := g.Allow(ctx, "acme/repo", 1, 0.2, now)
+	allowed, reason, err := g.Allow(ctx, tenant, "acme/repo", 1, 0.2, now)
 	require.NoError(t, err)
 	require.False(t, allowed)
 	require.Contains(t, reason, "PR budget exceeded")
@@ -29,11 +30,27 @@ func TestGuardBlocksWhenDailyLimitExceeded(t *testing.T) {
 
 	ctx := context.Background()
 	now := time.Now().UTC()
+	tenant := "tenant-a"
 
-	require.NoError(t, g.Record(ctx, "acme/repo", 1, 0.95, now))
+	require.NoError(t, g.Record(ctx, tenant, "acme/repo", 1, 0.95, now))
 
-	allowed, reason, err := g.Allow(ctx, "other/repo", 2, 0.1, now)
+	allowed, reason, err := g.Allow(ctx, tenant, "other/repo", 2, 0.1, now)
 	require.NoError(t, err)
 	require.False(t, allowed)
 	require.Contains(t, reason, "Daily budget exceeded")
+}
+
+func TestGuardIsTenantScoped(t *testing.T) {
+	store := NewMemoryStore()
+	g := NewGuard(true, 1.0, 10.0, store)
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	require.NoError(t, g.Record(ctx, "tenant-a", "acme/repo", 1, 0.95, now))
+
+	allowed, reason, err := g.Allow(ctx, "tenant-b", "acme/repo", 1, 0.1, now)
+	require.NoError(t, err)
+	require.True(t, allowed)
+	require.Empty(t, reason)
 }

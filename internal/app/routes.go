@@ -79,7 +79,7 @@ func (s *Server) routes() {
 			s.cfg.BudgetEnabled,
 			s.cfg.BudgetDailyUSD,
 			s.cfg.BudgetPerPRUSD,
-			budget.NewMemoryStore(),
+			budget.NewStore(s.cfg),
 		),
 	)
 

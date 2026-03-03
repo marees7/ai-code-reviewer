@@ -67,6 +67,8 @@ When a Pull Request is opened:
 * Pluggable LLM (OpenAI / Ollama)
 * Async worker
 * Retry & rate limit
+* Multi-tenant budget guard
+* Persistent budget tracking (Redis)
 * Observability
 * Docker ready
 
@@ -232,7 +234,7 @@ The AI reviews code based on:
 * Day 11 – Worker
 * Day 12 – Observability
 * Day 13 – Tests
-* Day 14 – Docker
+* Day 14 – Multi-tenant + Persistent budget
 
 ---
 

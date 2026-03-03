@@ -8,9 +8,9 @@ import (
 )
 
 type Store interface {
-	AddSpend(ctx context.Context, repo string, pr int, usd float64, at time.Time) error
-	GetPRSpend(ctx context.Context, repo string, pr int) (float64, error)
-	GetDailySpend(ctx context.Context, day time.Time) (float64, error)
+	AddSpend(ctx context.Context, tenant, repo string, pr int, usd float64, at time.Time) error
+	GetPRSpend(ctx context.Context, tenant, repo string, pr int) (float64, error)
+	GetDailySpend(ctx context.Context, tenant string, day time.Time) (float64, error)
 }
 
 type Guard struct {
@@ -33,12 +33,12 @@ func (g *Guard) Enabled() bool {
 	return g != nil && g.enabled
 }
 
-func (g *Guard) Allow(ctx context.Context, repo string, pr int, projectedCostUSD float64, now time.Time) (bool, string, error) {
+func (g *Guard) Allow(ctx context.Context, tenant, repo string, pr int, projectedCostUSD float64, now time.Time) (bool, string, error) {
 	if g == nil || !g.enabled || g.store == nil {
 		return true, "", nil
 	}
 
-	prSpend, err := g.store.GetPRSpend(ctx, repo, pr)
+	prSpend, err := g.store.GetPRSpend(ctx, tenant, repo, pr)
 	if err != nil {
 		return false, "", err
 	}
@@ -46,7 +46,7 @@ func (g *Guard) Allow(ctx context.Context, repo string, pr int, projectedCostUSD
 		return false, fmt.Sprintf("PR budget exceeded (limit=%.4f USD)", g.prLimit), nil
 	}
 
-	daySpend, err := g.store.GetDailySpend(ctx, now)
+	daySpend, err := g.store.GetDailySpend(ctx, tenant, now)
 	if err != nil {
 		return false, "", err
 	}
@@ -57,11 +57,11 @@ func (g *Guard) Allow(ctx context.Context, repo string, pr int, projectedCostUSD
 	return true, "", nil
 }
 
-func (g *Guard) Record(ctx context.Context, repo string, pr int, usd float64, now time.Time) error {
+func (g *Guard) Record(ctx context.Context, tenant, repo string, pr int, usd float64, now time.Time) error {
 	if g == nil || !g.enabled || g.store == nil || usd <= 0 {
 		return nil
 	}
-	return g.store.AddSpend(ctx, repo, pr, usd, now)
+	return g.store.AddSpend(ctx, tenant, repo, pr, usd, now)
 }
 
 type MemoryStore struct {
@@ -77,31 +77,38 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-func (m *MemoryStore) AddSpend(_ context.Context, repo string, pr int, usd float64, at time.Time) error {
+func (m *MemoryStore) AddSpend(_ context.Context, tenant, repo string, pr int, usd float64, at time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.byPR[prKey(repo, pr)] += usd
-	m.byDay[dayKey(at)] += usd
+	m.byPR[prKey(tenant, repo, pr)] += usd
+	m.byDay[dayKey(tenant, at)] += usd
 	return nil
 }
 
-func (m *MemoryStore) GetPRSpend(_ context.Context, repo string, pr int) (float64, error) {
+func (m *MemoryStore) GetPRSpend(_ context.Context, tenant, repo string, pr int) (float64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.byPR[prKey(repo, pr)], nil
+	return m.byPR[prKey(tenant, repo, pr)], nil
 }
 
-func (m *MemoryStore) GetDailySpend(_ context.Context, day time.Time) (float64, error) {
+func (m *MemoryStore) GetDailySpend(_ context.Context, tenant string, day time.Time) (float64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.byDay[dayKey(day)], nil
+	return m.byDay[dayKey(tenant, day)], nil
 }
 
-func prKey(repo string, pr int) string {
-	return fmt.Sprintf("%s#%d", repo, pr)
+func prKey(tenant, repo string, pr int) string {
+	return fmt.Sprintf("%s|%s#%d", tenantKey(tenant), repo, pr)
 }
 
-func dayKey(t time.Time) string {
-	return t.UTC().Format("2006-01-02")
+func dayKey(tenant string, t time.Time) string {
+	return fmt.Sprintf("%s|%s", tenantKey(tenant), t.UTC().Format("2006-01-02"))
+}
+
+func tenantKey(tenant string) string {
+	if tenant == "" {
+		return "default"
+	}
+	return tenant
 }

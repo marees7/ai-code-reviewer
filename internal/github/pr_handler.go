@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -12,6 +13,7 @@ const (
 	prActionSynchronize = "synchronize"
 	botLoginToken       = "bot"
 	enqueueTimeout      = 3 * time.Second
+	tenantFallback      = "default"
 )
 
 func (h *WebhookHandler) handlePullRequest(payload []byte) {
@@ -70,6 +72,7 @@ func (h *WebhookHandler) handlePullRequest(payload []byte) {
 
 	err := h.queue.Enqueue(
 		ctx,
+		resolveTenant(event),
 		event.Repository.FullName,
 		event.PullRequest.Number,
 	)
@@ -88,4 +91,16 @@ func (h *WebhookHandler) handlePullRequest(payload []byte) {
 		"pr", event.PullRequest.Number,
 		"action", event.Action,
 	)
+}
+
+func resolveTenant(event PullRequestEvent) string {
+	if event.Installation.ID > 0 {
+		return fmt.Sprintf("gh-installation:%d", event.Installation.ID)
+	}
+	repo := strings.TrimSpace(event.Repository.FullName)
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) == 2 && strings.TrimSpace(parts[0]) != "" {
+		return strings.TrimSpace(parts[0])
+	}
+	return tenantFallback
 }

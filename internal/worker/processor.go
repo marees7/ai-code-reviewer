@@ -136,7 +136,8 @@ processing:
 			chunks := p.chunker.Split(pf.Filename, content)
 
 			for _, ch := range chunks {
-				allowed, reason, err := p.budgetGuard.Allow(ctx, j.Repo, j.PR, 0, time.Now())
+				tenant := resolveBudgetTenant(j)
+				allowed, reason, err := p.budgetGuard.Allow(ctx, tenant, j.Repo, j.PR, 0, time.Now())
 				if err != nil {
 					p.logger.Error("budget guard check failed", "err", err)
 					return
@@ -188,7 +189,7 @@ processing:
 				observability.AITokens.WithLabelValues(provider, model, "completion").Add(float64(reviewResp.Usage.CompletionTokens))
 				observability.AICostUSD.WithLabelValues(provider, model).Add(callCostUSD)
 
-				if err := p.budgetGuard.Record(ctx, j.Repo, j.PR, callCostUSD, time.Now()); err != nil {
+				if err := p.budgetGuard.Record(ctx, tenant, j.Repo, j.PR, callCostUSD, time.Now()); err != nil {
 					p.logger.Error("budget guard record failed", "err", err)
 					return
 				}
@@ -344,4 +345,16 @@ func budgetNote(s reviewSummary) string {
 		return "\n- " + budgetStoppedPrefix
 	}
 	return "\n- " + budgetStoppedPrefix + ": " + s.BudgetReason
+}
+
+func resolveBudgetTenant(j Job) string {
+	if strings.TrimSpace(j.Tenant) != "" {
+		return strings.TrimSpace(j.Tenant)
+	}
+
+	parts := strings.SplitN(strings.TrimSpace(j.Repo), "/", 2)
+	if len(parts) == 2 && strings.TrimSpace(parts[0]) != "" {
+		return strings.TrimSpace(parts[0])
+	}
+	return "default"
 }

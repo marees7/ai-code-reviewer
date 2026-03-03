@@ -9,6 +9,7 @@ type Queue interface {
 }
 
 type Job struct {
-	Repo string
-	PR   int
+	Tenant string
+	Repo   string
+	PR     int
 }

@@ -1,9 +1,10 @@
 package github
 
 type PullRequestEvent struct {
-	Action      string      `json:"action"`
-	PullRequest PullRequest `json:"pull_request"`
-	Repository  Repository  `json:"repository"`
+	Action       string       `json:"action"`
+	PullRequest  PullRequest  `json:"pull_request"`
+	Repository   Repository   `json:"repository"`
+	Installation Installation `json:"installation"`
 }
 
 type PullRequest struct {
@@ -30,4 +31,8 @@ type PullRequest struct {
 
 type Repository struct {
 	FullName string `json:"full_name"`
+}
+
+type Installation struct {
+	ID int64 `json:"id"`
 }

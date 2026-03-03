@@ -26,6 +26,8 @@ type Config struct {
 	BudgetEnabled        bool
 	BudgetDailyUSD       float64
 	BudgetPerPRUSD       float64
+	BudgetStore          string
+	BudgetRedisAddr      string
 }
 
 func Load() *Config {
@@ -49,6 +51,8 @@ func Load() *Config {
 		BudgetEnabled:        getEnvBool("BUDGET_ENABLED", false),
 		BudgetDailyUSD:       getEnvFloat("BUDGET_DAILY_USD", 10.0),
 		BudgetPerPRUSD:       getEnvFloat("BUDGET_PER_PR_USD", 1.0),
+		BudgetStore:          getEnv("BUDGET_STORE", "memory"), // memory | redis
+		BudgetRedisAddr:      getEnv("BUDGET_REDIS_ADDR", ""),
 	}
 }
 

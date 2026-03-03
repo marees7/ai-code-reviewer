@@ -11,9 +11,10 @@ func NewAdapter(q Queue) *Adapter {
 	return &Adapter{q: q}
 }
 
-func (a *Adapter) Enqueue(ctx context.Context, repo string, pr int) error {
+func (a *Adapter) Enqueue(ctx context.Context, tenant, repo string, pr int) error {
 	return a.q.Push(ctx, Job{
-		Repo: repo,
-		PR:   pr,
+		Tenant: tenant,
+		Repo:   repo,
+		PR:     pr,
 	})
 }

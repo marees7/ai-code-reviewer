@@ -281,17 +281,18 @@ Ship a real, working GitHub AI reviewer in 14 days with daily commits and Linked
 
 ---
 
-## 🔹 Day 14 – Docker + Polish
+## 🔹 Day 14 – Multi-Tenant + Persistent Budget
 
 **Tasks**
 
-* Dockerfile
-* README
-* Demo
+* Add tenant-aware job routing from webhook to worker
+* Scope budget limits by tenant + repository/PR
+* Add Redis-backed persistent budget store
+* Wire config flags for budget backend selection
 
 **Commit**
 
-* “chore: docker & docs”
+* “feat: multi-tenant persistent budget guard”
 
 ---
 
